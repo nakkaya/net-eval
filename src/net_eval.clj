@@ -33,20 +33,22 @@
 (defn- net-read [conn]
   (.readLine (:in @conn)))
 
-(defn- send-task [conn task & args]
+(defn- send-task [conn task args]
   "Send the task to a remote machine, append arguments to the call if any, return the object send from the remote machine."
   (let [meta (meta task)
 	f (if (nil? args)
 	    (list (:task meta))
-	    (list (:task meta) (first args)))]
+	    (cons (:task meta) args))]
     (net-write conn f)
     (read-string (re-sub  #".*=>" "" (net-read conn)))))
 
-(defn- fire-task [list host port task]
+(defn- fire-task [list task]
   "Connect to a slave, send the task and append output to the list, swallow any errors."
   (try
-   (let [conn (connect host port)
-	 res (send-task conn task)]
+   (let [[host port _ & args] task
+	 task (task 2)
+	 conn (connect host port)
+	 res (send-task conn task args)]
      (.close (:socket @conn))
      (conj list res))
    (catch Exception e list)))
@@ -55,7 +57,7 @@
   "Send tasks for evaluation, takes a vector of vectors containing host port and task."
   (let [agent (agent [])] 
     (doseq [task tasks] 
-      (send agent fire-task (first task) (second task) (task 2)))
+      (send agent fire-task task))
     agent))
 
 (defn -main [& args]
@@ -73,19 +75,19 @@
 (deftest test-task
   (let [conn (connect "127.0.0.1" 9999)]
     (is (= [1 2 3]  (do (deftask atask [] [1 2 3])
-			(send-task conn #'atask))))
+			(send-task conn #'atask nil))))
     (is (= '(0 1 2) (do (deftask atask [a] (range a))
-			(send-task conn #'atask 3))))
+			(send-task conn #'atask '(3)))))
     (is (= 500 (do (deftask atask [a] (range a))
-		   (count (send-task conn #'atask 500)))))))
+		   (count (send-task conn #'atask '(500))))))))
 
 (deftest test-agent-state
   (is (= [[1 2 3]] (do (deftask atask [] [1 2 3])
-		       (fire-task [] "127.0.0.1" 9999 #'atask))))
+		       (fire-task [] ["127.0.0.1" 9999 #'atask]))))
   (is (= [[1][1 2 3]] (do (deftask atask [] [1 2 3])
-			  (fire-task [[1]] "127.0.0.1" 9999 #'atask))))
+			  (fire-task [[1]] ["127.0.0.1" 9999 #'atask]))))
   (is (= [] (do (deftask atask [] [1 2 3])
-		(fire-task [] "127.0.1.1" 9999 #'atask)))))
+		(fire-task [] ["127.0.1.1" 9999 #'atask])))))
 
 (deftest test-net-eval
   (is (= [[1 2 3]] (do (deftask atask [] [1 2 3])
@@ -94,6 +96,10 @@
   (is (= [[1 2] [1 2]] (do (deftask atask [] [1 2])
 			   (let [a (net-eval [["127.0.0.1" 9999 #'atask]
 					      ["127.0.0.1" 9999 #'atask]])]
+			     (await a) @a))))
+  (is (= [[1 2 3]] (do (deftask atask [a b c] [a b c])
+			   (let [a (net-eval 
+				    [["127.0.0.1" 9999 #'atask 1 2 3]])]
 			     (await a) @a)))))
 
 (defn test-ns-hook []
