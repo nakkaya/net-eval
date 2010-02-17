@@ -5,6 +5,7 @@
   (:use clojure.test)
   (:use clojure.contrib.server-socket)
   (:use clojure.contrib.str-utils)
+  (:use [clojure.contrib.duck-streams :only [reader writer]])
   (:import (java.net Socket)
 	   (java.io PrintWriter InputStreamReader BufferedReader)
 	   (java.net InetSocketAddress)))
@@ -28,8 +29,8 @@
   (let [socket (Socket.)]
     (.connect socket (InetSocketAddress. host port) connect-timeout)
     (ref {:socket socket
-	  :in (BufferedReader. (InputStreamReader. (.getInputStream socket)))
-	  :out (PrintWriter. (.getOutputStream socket))})))
+	  :in  (reader socket)
+	  :out (writer socket)})))
 
 (defn- net-write [conn cmd]
   (doto (:out @conn)
