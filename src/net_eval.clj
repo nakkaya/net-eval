@@ -17,8 +17,9 @@
      (defn ~@body)
         assoc :task (quote ~(cons 'fn body))))
 
-(defn- connect [host port]
+(defn- connect
   "Connect to a remote socket and return handles for input and output."
+  [host port]
   (let [socket (Socket.)]
     (.connect socket (InetSocketAddress. host port) connect-timeout)
     (ref {:socket socket
@@ -33,8 +34,10 @@
 (defn- net-read [conn]
   (.readLine (:in @conn)))
 
-(defn- send-task [conn task args]
-  "Send the task to a remote machine, append arguments to the call if any, return the object send from the remote machine."
+(defn- send-task
+  "Send the task to a remote machine, append arguments to the call if any, 
+   return the object send from the remote machine."
+  [conn task args]
   (let [meta (meta task)
 	f (if (nil? args)
 	    (list (:task meta))
@@ -42,8 +45,10 @@
     (net-write conn f)
     (read-string (re-sub  #".*=>" "" (net-read conn)))))
 
-(defn- fire-task [task data]
-  "Connect to a slave, send the task and append output to the list, swallow any errors."
+(defn- fire-task
+  "Connect to a slave, send the task and append output to the list, 
+   swallow any errors."
+  [task data]
   (try
    (let [[host port _ & args] task
 	 call (task 2)
@@ -54,18 +59,23 @@
      task)
    (catch Exception e)))
 
-(defn net-eval [tasks]
-  "Send tasks for evaluation, takes a vector of vectors containing host port and task."
+(defn net-eval
+  "Send tasks for evaluation, takes a vector of vectors containing 
+   host port and task."
+  [tasks]
   (let [agents (map #(agent %) tasks)
 	data (ref (with-meta [] {:agents agents}))]
     (doseq [agent agents] (send-off agent fire-task data))
     data))
 
-(defn await-nodes [ref]
+(defn await-nodes 
+  "Wait for all nodes to return."
+  [ref]
   (apply await (:agents (meta @ref))))
 
-(defn -main [& args]
+(defn -main
   "Create a REPL server, waiting for incoming tasks."
+  [& args]
   (let [port (if (not(nil? args)) (first args) 9999)]
     (create-repl-server port)))
 
