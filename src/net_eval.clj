@@ -68,12 +68,12 @@
   "Send tasks for evaluation, takes a vector of vectors containing 
    host port and task."
   [tasks]  
-  (for [task tasks]
-    (future (fire-task task))))
+  (vec (for [task tasks]
+         (future (fire-task task)))))
 
 (defn await-nodes [results]
   "Wait for all nodes to return."
-  (map deref results))
+  (vec (map deref results)))
 
 (defn -main
   "Create a REPL server, waiting for incoming tasks."
