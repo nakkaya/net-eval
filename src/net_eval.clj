@@ -51,32 +51,28 @@
     (read-string (re-sub  #".*=>" "" (net-read conn)))))
 
 (defn- fire-task
-  "Connect to a slave, send the task and append output to the list, 
+  "Connect to a slave, send the task and return the output, 
    swallow any errors."
-  [task data]
+  [task]
   (try
    (let [[host port _ & args] task
 	 call (task 2)
 	 conn (connect host port)
 	 res (send-task conn call args)]
      (.close (:socket @conn))
-     (dosync (alter data conj res))
-     task)
+     res)
    (catch Exception e)))
 
 (defn net-eval
   "Send tasks for evaluation, takes a vector of vectors containing 
    host port and task."
-  [tasks]
-  (let [agents (map #(agent %) tasks)
-	data (ref (with-meta [] {:agents agents}))]
-    (doseq [agent agents] (send-off agent fire-task data))
-    data))
+  [tasks]  
+  (for [task tasks]
+    (future (fire-task task))))
 
-(defn await-nodes 
+(defn await-nodes [results]
   "Wait for all nodes to return."
-  [ref]
-  (apply await (:agents (meta @ref))))
+  (map deref results))
 
 (defn -main
   "Create a REPL server, waiting for incoming tasks."
@@ -107,28 +103,25 @@
 		   (count (send-task conn #'atask '(500))))))))
 
 (deftest test-agent-state
-  (is (= [[1 2 3]] (let [r (ref [])] 
-		     (deftask atask [] [1 2 3])
-		     (fire-task ["127.0.0.1" 9999 #'atask] r) @r)))
-  (is (= [[1][1 2 3]] (let [r (ref [[1]])] 
-			(deftask atask [] [1 2 3])
-			(fire-task ["127.0.0.1" 9999 #'atask] r) @r)))
-  (is (= [] (let [r (ref [])] 
-	      (deftask atask [] [1 2 3])
-	      (fire-task ["127.0.1.1" 9999 #'atask] r) @r))))
+  (is (= [1 2 3] (do (deftask atask [] [1 2 3])
+                     (fire-task ["127.0.0.1" 9999 #'atask]))))
+  (is (= [1 2 3] (do (deftask atask [] [1 2 3])
+                     (fire-task ["127.0.0.1" 9999 #'atask]))))
+  (is (= nil (do (deftask atask [] [1 2 3])
+                 (fire-task ["127.0.1.1" 9999 #'atask])))))
 
 (deftest test-net-eval
   (is (= [[1 2 3]] (do (deftask atask [] [1 2 3])
 		       (let [a (net-eval [["127.0.0.1" 9999 #'atask]])]
-			 (await-nodes a) @a))))
+			 (await-nodes a)))))
   (is (= [[1 2] [1 2]] (do (deftask atask [] [1 2])
 			   (let [a (net-eval [["127.0.0.1" 9999 #'atask]
 					      ["127.0.0.1" 9999 #'atask]])]
-			     (await-nodes a) @a))))
+			     (await-nodes a)))))
   (is (= [[1 2 3]] (do (deftask atask [a b c] [a b c])
 		       (let [a (net-eval 
 				[["127.0.0.1" 9999 #'atask 1 2 3]])]
-			 (await-nodes a) @a)))))
+			 (await-nodes a))))))
 
 (defn test-ns-hook []
   (try (create-repl-server 9999) (catch Exception e))
