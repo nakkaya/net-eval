@@ -10,12 +10,17 @@
 	   (java.net InetSocketAddress)))
 (def connect-timeout 3)
 
+(defn to-fn [func]
+  (if (vector? (first func))
+    (cons 'fn func)
+    (to-fn (rest func))))
+
 (defmacro deftask
   "Define a func and save a copy of it as a list in its metadata."
   [& body]
   `(alter-meta!
      (defn ~@body)
-        assoc :task (quote ~(cons 'fn body))))
+        assoc :task (quote ~(to-fn body))))
 
 (defn- connect
   "Connect to a remote socket and return handles for input and output."
@@ -79,6 +84,12 @@
   (let [port (if (not(nil? args)) (first args) 9999)]
     (create-repl-server port)))
 
+(deftest test-defmacro
+  (is (= '(fn [a b] a b) (do (deftask atask "Some doc" [a b] a b)
+			     (:task (meta #'atask)))))
+  (is (= '(fn [] (+ 1 2)) (do (deftask atask [] (+ 1 2))
+			      (:task (meta #'atask))))))
+
 (deftest test-network
   (let [conn (connect "127.0.0.1" 9999)]
     (is (= "clojure.core=> 3"  (do (net-write conn "(+ 1 2)")
@@ -121,6 +132,7 @@
 
 (defn test-ns-hook []
   (try (create-repl-server 9999) (catch Exception e))
+  (test-defmacro)
   (test-network)
   (test-task)
   (test-agent-state)
