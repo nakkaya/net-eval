@@ -78,7 +78,7 @@
 (defn -main
   "Create a REPL server, waiting for incoming tasks."
   [& args]
-  (let [port (if (not(nil? args)) (first args) 9999)]
+  (let [port (if (seq args) (first args) 9999)]
     (create-repl-server port)))
 
 (deftest test-defmacro
