@@ -71,10 +71,6 @@
   (vec (for [task tasks]
          (future (fire-task task)))))
 
-(defn await-nodes [results]
-  "Wait for all nodes to return."
-  (vec (map deref results)))
-
 (defn -main
   "Create a REPL server, waiting for incoming tasks."
   [& args]
@@ -113,16 +109,15 @@
 
 (deftest test-net-eval
   (is (= [[1 2 3]] (do (deftask atask [] [1 2 3])
-		       (let [a (net-eval [["127.0.0.1" 9999 #'atask]])]
-			 (await-nodes a)))))
+		       (map deref (net-eval [["127.0.0.1" 9999 #'atask]])))))
   (is (= [[1 2] [1 2]] (do (deftask atask [] [1 2])
-			   (let [a (net-eval [["127.0.0.1" 9999 #'atask]
-					      ["127.0.0.1" 9999 #'atask]])]
-			     (await-nodes a)))))
+			   (map 
+			    deref (net-eval [["127.0.0.1" 9999 #'atask]
+					     ["127.0.0.1" 9999 #'atask]])))))
   (is (= [[1 2 3]] (do (deftask atask [a b c] [a b c])
-		       (let [a (net-eval 
-				[["127.0.0.1" 9999 #'atask 1 2 3]])]
-			 (await-nodes a))))))
+		       (map 
+			deref 
+			(net-eval [["127.0.0.1" 9999 #'atask 1 2 3]]))))))
 
 (defn test-ns-hook []
   (try (create-repl-server 9999) (catch Exception e))
