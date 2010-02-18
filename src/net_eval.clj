@@ -7,7 +7,6 @@
   (:use clojure.contrib.str-utils)
   (:use [clojure.contrib.duck-streams :only [reader writer]])
   (:import (java.net Socket)
-	   (java.io PrintWriter InputStreamReader BufferedReader)
 	   (java.net InetSocketAddress)))
 (def connect-timeout 3)
 
