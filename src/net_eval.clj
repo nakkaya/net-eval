@@ -58,10 +58,9 @@
   (try
    (let [[host port _ & args] task
 	 call (task 2)
-	 conn (connect host port)
-	 res (send-task conn call args)]
-     (.close (:socket @conn))
-     res)
+	 conn (connect host port)]
+     (with-open [_ (:socket @conn)]
+       (send-task conn call args)))
    (catch Exception e)))
 
 (defn net-eval
