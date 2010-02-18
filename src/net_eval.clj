@@ -43,10 +43,7 @@
   "Send the task to a remote machine, append arguments to the call if any, 
    return the object send from the remote machine."
   [conn task args]
-  (let [meta (meta task)
-	f (if (nil? args)
-	    (list (:task meta))
-	    (cons (:task meta) args))]
+  (let [f (cons (:task (meta task)) args)]
     (net-write conn f)
     (read-string (re-sub  #".*=>" "" (net-read conn)))))
 
