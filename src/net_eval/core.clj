@@ -1,15 +1,12 @@
-(ns net-eval
-  #^{:author "Nurullah Akkaya",
-     :doc "Simple distributed computing."}
-  (:gen-class)
-  (:use clojure.test)
-  (:use clojure.contrib.server-socket)
-  (:use clojure.contrib.str-utils)
-  (:use [clojure.contrib.error-kit :as errkit])
-  (:use [clojure.contrib.duck-streams :only [reader writer]])
-  (:import (java.net Socket)
-	   (java.net InetSocketAddress)))
-(def connect-timeout 3)
+(ns net-eval.core
+ "Execute code on remote nodes."
+ (:gen-class)
+ (:use [clojure.tools.nrepl.server :only [start-server stop-server]]
+       [clojure.tools.nrepl :as nrepl]
+       [slingshot.slingshot :only [throw+]]))
+
+(def connect-timeout 1000)
+(def default-port 9999)
 
 (defn to-fn [func]
   (if (vector? (first func))
@@ -21,70 +18,51 @@
   [& body]
   `(alter-meta!
      (defn ~@body)
-        assoc :task (quote ~(to-fn body))))
-
-(defn- connect
-  "Connect to a remote socket and return handles for input and output."
-  [host port]
-  (let [socket (Socket.)]
-    (.connect socket (InetSocketAddress. host port) connect-timeout)
-    (ref {:socket socket
-	  :in  (reader socket)
-	  :out (writer socket)})))
-
-(defn- net-write [conn cmd]
-  (doto (:out @conn)
-    (.println cmd)
-    (.flush)))
-
-(defn- net-read [conn]
-  (.readLine (:in @conn)))
+     assoc :task (quote ~(to-fn body))))
 
 (defn- send-task
-  "Send the task to a remote machine, append arguments to the call if any, 
+  "Send the task to a remote machine, append arguments to the call if any,
    return the object send from the remote machine."
   [conn task args]
-  (let [f (cons (:task (meta task)) args)]
-    (net-write conn f)
-    (read-string (re-sub  #".*=>" "" (net-read conn)))))
+  (let [f (with-out-str (pr (cons (:task (meta task)) args)))]
+    (-> (nrepl/client conn connect-timeout)
+        (nrepl/message {:op "eval" :code f})
+        nrepl/response-values)))
 
-(errkit/deferror connection-error []
-  "Raised when an exception occurred when executing task. task-pos
-  is the position of task within the sequence given to net-eval."
-  [task task-pos exception]
-  {:msg (str "Connection error: Task " task-pos " failed to execute.")
-   :unhandled (constantly nil)})
-
-(defn- fire-task
-  "Connect to a slave, send the task and return the output, 
+(defn- fire-request
+  "Connect to a slave, send the task and return the output,
    swallow any errors."
-  ([task]
-     (fire-task task 0))
-  ([task task-pos]
+  ([request]
+   (fire-request request 0))
+  ([request request-pos]
      (try
-      (let [[host port _ & args] task
-            call (task 2)
-            conn (connect host port)]
-        (with-open [_ (:socket @conn)]
-          (send-task conn call args)))
-      (catch Exception e
-        (errkit/raise connection-error task task-pos e)))))
+      (let [[host port task & args] request]
+        (with-open [conn (nrepl/connect :host host :port port)]
+          (send-task conn task args)))
+     (catch Exception e
+       (throw+ {:type ::connection-error :request request :request-pos request-pos :exception e})))))
 
 (defn net-eval
-  "Send tasks for evaluation, takes a vector of vectors containing 
-   host port and task.
+  "Send tasks for evaluation, takes a vector of vectors containing
+  host, port, task and args.
 
-   Raises connection-error (using clojure.contrib.error-kit) if
-   an error occurred while executing a task."
-  [tasks]  
-  (vec (map (fn [task task-pos]
-              (let [fire-task (errkit/rebind-fn fire-task)]
-                (future (fire-task task task-pos))))
-            tasks
-            (iterate inc 0))))
+  Raises :net-eval/connection-error (using slingshot.slingshot.throw+) if
+  an error occurred while executing a task."
+  [requests]
+  (vec (map (fn [request request-pos]
+             (future (fire-request request request-pos)))
+        requests
+        (iterate inc 0))))
+
+(defn start-worker
+  "Create a net-eval worker, waiting for incoming tasks."
+  ([]
+   (start-worker default-port))
+  ([port]
+   (start-server :port port)))
 
 (defn -main
-  "Create a REPL server, waiting for incoming tasks."
   [& args]
-  (let [port (if (seq args) (first args) 9999)]
-    (create-repl-server port)))
+  (if (seq args)
+   (start-worker (first args))
+   (start-worker)))
