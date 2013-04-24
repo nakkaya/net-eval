@@ -27,7 +27,8 @@
   (let [f (with-out-str (pr (cons (:task (meta task)) args)))]
     (-> (nrepl/client conn connect-timeout)
         (nrepl/message {:op "eval" :code f})
-        nrepl/response-values)))
+        nrepl/response-values
+        first)))
 
 (defn- fire-request
   "Connect to a slave, send the task and return the output,
