@@ -5,4 +5,5 @@
             :url "http://opensource.org/licenses/MIT"}
   :min-lein-version "2.0.0"
   :dependencies [[org.clojure/clojure "1.5.0"]
+                 [org.clojure/tools.nrepl "0.2.2"]
                  [slingshot "0.10.3"]])
