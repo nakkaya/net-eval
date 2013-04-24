@@ -44,15 +44,15 @@
 
 (defn net-eval
   "Send tasks for evaluation, takes a vector of vectors containing
-  host, port, task and args.
+   host, port, task and args.
 
-  Raises :net-eval/connection-error (using slingshot.slingshot.throw+) if
-  an error occurred while executing a task."
+   Raises :net-eval/connection-error (using slingshot.slingshot.throw+) if
+   an error occurred while executing a task."
   [requests]
   (vec (map (fn [request request-pos]
-             (future (fire-request request request-pos)))
-        requests
-        (iterate inc 0))))
+              (future (fire-request request request-pos)))
+            requests
+            (iterate inc 0))))
 
 (defn start-worker
   "Create a net-eval worker, waiting for incoming tasks."
