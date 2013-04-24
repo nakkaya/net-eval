@@ -21,5 +21,7 @@ a task and send it to the worker.
        s)))
     
     (def ip "localhost")
-    (net-eval [[ip 4321 #'sum-and-print-task 4 5]
-               [ip 4321 #'sum-and-print-task 6 9]])
+    (def response (net-eval [[ip 4321 #'sum-and-print-task 4 5]
+                             [ip 4321 #'sum-and-print-task 6 9]]))
+    (println (map deref response))
+
