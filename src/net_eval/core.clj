@@ -61,6 +61,11 @@
   ([port]
    (start-server :port port)))
 
+(defn stop-worker
+  "End execution of the net-eval worker."
+  ([worker]
+   (stop-server worker)))
+
 (defn -main
   [& args]
   (if (seq args)
